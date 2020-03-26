@@ -1151,6 +1151,8 @@ class GeckoEngineSessionTest {
         var interceptorCalledWithUri: String? = null
 
         val interceptor = object : RequestInterceptor {
+            override fun interceptsAppInitiatedRequests() = true
+
             override fun onLoadRequest(
                 engineSession: EngineSession,
                 uri: String,
@@ -1163,10 +1165,7 @@ class GeckoEngineSessionTest {
         }
 
         val defaultSettings = DefaultSettings(requestInterceptor = interceptor)
-
-        GeckoEngineSession(mock(), geckoSessionProvider = geckoSessionProvider,
-                defaultSettings = defaultSettings)
-
+        GeckoEngineSession(mock(), geckoSessionProvider = geckoSessionProvider, defaultSettings = defaultSettings)
         captureDelegates()
 
         navigationDelegate.value.onLoadRequest(geckoSession, mockLoadRequest("sample:about"))
@@ -1180,6 +1179,8 @@ class GeckoEngineSessionTest {
         var interceptorCalledWithUri: String? = null
 
         val interceptor = object : RequestInterceptor {
+            override fun interceptsAppInitiatedRequests() = true
+
             override fun onLoadRequest(
                 engineSession: EngineSession,
                 uri: String,
@@ -1192,13 +1193,10 @@ class GeckoEngineSessionTest {
         }
 
         val defaultSettings = DefaultSettings(requestInterceptor = interceptor)
-
-        GeckoEngineSession(mock(), geckoSessionProvider = geckoSessionProvider,
-                defaultSettings = defaultSettings)
-
+        GeckoEngineSession(mock(), geckoSessionProvider = geckoSessionProvider, defaultSettings = defaultSettings)
         captureDelegates()
 
-        navigationDelegate.value.onLoadRequest(geckoSession, mockLoadRequest("sample:about"))
+        navigationDelegate.value.onLoadRequest(geckoSession, mockLoadRequest("sample:about", "trigger:uri"))
 
         assertEquals("sample:about", interceptorCalledWithUri)
         verify(geckoSession).loadUri(
@@ -1207,6 +1205,35 @@ class GeckoEngineSessionTest {
             GeckoSession.LOAD_FLAGS_NONE,
             null as Map<String, String>?
         )
+    }
+
+    @Test
+    fun settingInterceptorCanIgnoreUserInitiatedRequests() {
+        var interceptorCalled = false
+
+        val interceptor = object : RequestInterceptor {
+            override fun interceptsAppInitiatedRequests() = false
+
+            override fun onLoadRequest(
+                engineSession: EngineSession,
+                uri: String,
+                hasUserGesture: Boolean,
+                isSameDomain: Boolean
+            ): RequestInterceptor.InterceptionResponse? {
+                interceptorCalled = true
+                return RequestInterceptor.InterceptionResponse.Url("https://mozilla.org")
+            }
+        }
+
+        val defaultSettings = DefaultSettings(requestInterceptor = interceptor)
+        GeckoEngineSession(mock(), geckoSessionProvider = geckoSessionProvider, defaultSettings = defaultSettings)
+        captureDelegates()
+
+        navigationDelegate.value.onLoadRequest(geckoSession, mockLoadRequest("sample:about"))
+        assertFalse(interceptorCalled)
+
+        navigationDelegate.value.onLoadRequest(geckoSession, mockLoadRequest("sample:about", "trigger:uri"))
+        assertTrue(interceptorCalled)
     }
 
     @Test
@@ -1228,6 +1255,8 @@ class GeckoEngineSessionTest {
         var interceptorCalledWithUri: String? = null
 
         val interceptor = object : RequestInterceptor {
+            override fun interceptsAppInitiatedRequests() = true
+
             override fun onLoadRequest(
                 engineSession: EngineSession,
                 uri: String,
@@ -1761,7 +1790,7 @@ class GeckoEngineSessionTest {
         captureDelegates()
 
         val result = navigationDelegate.value.onLoadRequest(geckoSession,
-                mockLoadRequest("sample:about", GeckoSession.NavigationDelegate.TARGET_WINDOW_NEW))
+                mockLoadRequest("sample:about", null, GeckoSession.NavigationDelegate.TARGET_WINDOW_NEW))
 
         assertNotNull(result)
         assertEquals(result!!.poll(0), AllowOrDeny.ALLOW)
@@ -1863,6 +1892,8 @@ class GeckoEngineSessionTest {
         var observedIntent: Intent? = null
 
         engineSession.settings.requestInterceptor = object : RequestInterceptor {
+            override fun interceptsAppInitiatedRequests() = true
+
             override fun onLoadRequest(
                 engineSession: EngineSession,
                 uri: String,
@@ -1913,6 +1944,8 @@ class GeckoEngineSessionTest {
         var observedTriggeredByWebContent: Boolean? = null
 
         engineSession.settings.requestInterceptor = object : RequestInterceptor {
+            override fun interceptsAppInitiatedRequests() = true
+
             override fun onLoadRequest(
                 engineSession: EngineSession,
                 uri: String,
@@ -2355,6 +2388,7 @@ class GeckoEngineSessionTest {
 
     private fun mockLoadRequest(
         uri: String,
+        triggerUri: String? = null,
         target: Int = 0,
         triggeredByRedirect: Boolean = false,
         hasUserGesture: Boolean = false
@@ -2372,6 +2406,6 @@ class GeckoEngineSessionTest {
             Boolean::class.java)
         constructor.isAccessible = true
 
-        return constructor.newInstance(uri, uri, target, flags, hasUserGesture)
+        return constructor.newInstance(uri, triggerUri, target, flags, hasUserGesture)
     }
 }
